@@ -58,21 +58,8 @@ RCT_EXPORT_METHOD(
         return;
     }
 
-    if (useWebKit) {
-        if (@available(iOS 11.0, *)) {
-            dispatch_async(dispatch_get_main_queue(), ^(){
-                WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
-                [cookieStore setCookie:cookie completionHandler:^() {
-                    resolve(@(YES));
-                }];
-            });
-        } else {
-            reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
-        }
-    } else {
-        [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookie:cookie];
-        resolve(@(YES));
-    }
+    [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookie:cookie];
+    resolve(@(YES));
 }
 
 RCT_EXPORT_METHOD(
@@ -113,38 +100,11 @@ RCT_EXPORT_METHOD(
     resolver:(RCTPromiseResolveBlock)resolve
     rejecter:(RCTPromiseRejectBlock)reject)
 {
-    if (useWebKit) {
-        if (@available(iOS 11.0, *)) {
-            dispatch_async(dispatch_get_main_queue(), ^(){
-                NSString *topLevelDomain = url.host;
-
-                if (isEmpty(topLevelDomain)) {
-                    reject(@"", INVALID_URL_MISSING_HTTP, nil);
-                    return;
-                }
-
-                WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
-                [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *allCookies) {
-                    NSMutableDictionary *cookies = [NSMutableDictionary dictionary];
-                    for (NSHTTPCookie *cookie in allCookies) {
-                        if ([topLevelDomain containsString:cookie.domain] ||
-                            [cookie.domain isEqualToString: topLevelDomain]) {
-                            [cookies setObject:[self createCookieData:cookie] forKey:cookie.name];
-                        }
-                    }
-                    resolve(cookies);
-                }];
-            });
-        } else {
-            reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
-        }
-    } else {
-        NSMutableDictionary *cookies = [NSMutableDictionary dictionary];
-        for (NSHTTPCookie *cookie in [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:url]) {
-            [cookies setObject:[self createCookieData:cookie] forKey:cookie.name];
-        }
-        resolve(cookies);
+    NSMutableDictionary *cookies = [NSMutableDictionary dictionary];
+    for (NSHTTPCookie *cookie in [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:url]) {
+        [cookies setObject:[self createCookieData:cookie] forKey:cookie.name];
     }
+    resolve(cookies);
 }
 
 RCT_EXPORT_METHOD(
@@ -152,29 +112,12 @@ RCT_EXPORT_METHOD(
     resolver:(RCTPromiseResolveBlock)resolve
     rejecter:(RCTPromiseRejectBlock)reject)
 {
-    if (useWebKit) {
-        if (@available(iOS 11.0, *)) {
-            dispatch_async(dispatch_get_main_queue(), ^(){
-                // https://stackoverflow.com/questions/46465070/how-to-delete-cookies-from-wkhttpcookiestore#answer-47928399
-                NSSet *websiteDataTypes = [NSSet setWithArray:@[WKWebsiteDataTypeCookies]];
-                NSDate *dateFrom = [NSDate dateWithTimeIntervalSince1970:0];
-                [[WKWebsiteDataStore defaultDataStore] removeDataOfTypes:websiteDataTypes
-                                                        modifiedSince:dateFrom
-                                                        completionHandler:^() {
-                                                            resolve(@(YES));
-                                                        }];
-            });
-        } else {
-            reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
-        }
-    } else {
-        NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-        for (NSHTTPCookie *c in cookieStorage.cookies) {
-            [cookieStorage deleteCookie:c];
-        }
-        [[NSUserDefaults standardUserDefaults] synchronize];
-        resolve(@(YES));
+    NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    for (NSHTTPCookie *c in cookieStorage.cookies) {
+        [cookieStorage deleteCookie:c];
     }
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    resolve(@(YES));
 }
 
 RCT_EXPORT_METHOD(
@@ -186,43 +129,14 @@ RCT_EXPORT_METHOD(
     __block NSNumber * foundCookies = @NO;
     NSMutableArray<NSHTTPCookie *> * foundCookiesList = [NSMutableArray new];
 
-    if (useWebKit) {
-        if (@available(iOS 11.0, *)) {
-            dispatch_async(dispatch_get_main_queue(), ^(){
-                NSString *topLevelDomain = url.host;
-
-                if (isEmpty(topLevelDomain)) {
-                    reject(@"", INVALID_URL_MISSING_HTTP, nil);
-                    return;
-                }
-
-                WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
-                [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *allCookies) {
-                    for (NSHTTPCookie *cookie in allCookies) {
-                        if ([name isEqualToString:cookie.name]) {
-                             [foundCookiesList addObject:cookie];
-                             foundCookies = @YES;
-                        }
-                    }
-                    for (NSHTTPCookie *fCookie in foundCookiesList) {
-                        [cookieStore deleteCookie:fCookie completionHandler:nil];
-                    }
-                    resolve(foundCookies);
-                }];
-            });
-        } else {
-            reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
+    NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    for (NSHTTPCookie *c in cookieStorage.cookies) {
+        if ([[c name] isEqualToString:name]) {
+            [cookieStorage deleteCookie:c];
+            foundCookies = @YES;
         }
-    } else {
-           NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-           for (NSHTTPCookie *c in cookieStorage.cookies) {
-               if ([[c name] isEqualToString:name]) {
-                   [cookieStorage deleteCookie:c];
-                   foundCookies = @YES;
-               }
-           }
-           resolve(foundCookies);
     }
+    resolve(foundCookies);
 }
 
 RCT_EXPORT_METHOD(
@@ -230,21 +144,8 @@ RCT_EXPORT_METHOD(
     resolver:(RCTPromiseResolveBlock)resolve
     rejecter:(RCTPromiseRejectBlock)reject)
 {
-    if (useWebKit) {
-        if (@available(iOS 11.0, *)) {
-            dispatch_async(dispatch_get_main_queue(), ^(){
-                WKHTTPCookieStore *cookieStore = [[WKWebsiteDataStore defaultDataStore] httpCookieStore];
-                [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *allCookies) {
-                    resolve([self createCookieList: allCookies]);
-                }];
-            });
-        } else {
-            reject(@"", NOT_AVAILABLE_ERROR_MESSAGE, nil);
-        }
-    } else {
-        NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-        resolve([self createCookieList:cookieStorage.cookies]);
-    }
+    NSHTTPCookieStorage *cookieStorage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    resolve([self createCookieList:cookieStorage.cookies]);
 }
 
 -(NSDictionary *)createCookieList:(NSArray<NSHTTPCookie *>*)cookies
